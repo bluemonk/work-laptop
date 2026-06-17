@@ -16,7 +16,6 @@
 # Day-to-day:
 #   sudo nixos-rebuild switch --flake .#t14s
 #   nix flake update          # then rebuild
-
 {
   description = "ThinkPad T14s Gen 6 Intel — niri + noctalia, ZFS, impermanence";
 
@@ -47,39 +46,45 @@
     };
   };
 
-  outputs = inputs@{ self, nixpkgs, disko, impermanence, nixos-hardware
-                   , home-manager, noctalia, ... }:
-    let
-      username = "yourname"; # <- CHANGE ME (used for the user account + home-manager)
-    in
-    {
-      nixosConfigurations.t14s = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        specialArgs = { inherit inputs username; };
-        modules = [
-          disko.nixosModules.disko
-          impermanence.nixosModules.impermanence
+  outputs = inputs @ {
+    self,
+    nixpkgs,
+    disko,
+    impermanence,
+    nixos-hardware,
+    home-manager,
+    noctalia,
+    ...
+  }: let
+    username = "user";
+  in {
+    nixosConfigurations.t14s = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      specialArgs = {inherit inputs username;};
+      modules = [
+        disko.nixosModules.disko
+        impermanence.nixosModules.impermanence
 
-          # Generic Intel laptop profiles — no dedicated T14s Gen 6 Intel
-          # profile exists in nixos-hardware yet. (common-cpu-intel also
-          # pulls in the Intel GPU profile: media drivers, VA-API.)
-          nixos-hardware.nixosModules.common-cpu-intel
-          nixos-hardware.nixosModules.common-pc-laptop
-          nixos-hardware.nixosModules.common-pc-laptop-ssd
+        # Generic Intel laptop profiles — no dedicated T14s Gen 6 Intel
+        # profile exists in nixos-hardware yet. (common-cpu-intel also
+        # pulls in the Intel GPU profile: media drivers, VA-API.)
+        nixos-hardware.nixosModules.common-cpu-intel
+        nixos-hardware.nixosModules.common-pc-laptop
+        nixos-hardware.nixosModules.common-pc-laptop-ssd
 
-          ./disko.nix
-          ./zfs-impermanence.nix
-          ./hosts/t14s/configuration.nix
-          ./hosts/t14s/hardware.nix
+        ./disko.nix
+        ./zfs-impermanence.nix
+        ./hosts/t14s/configuration.nix
+        ./hosts/t14s/hardware.nix
 
-          home-manager.nixosModules.home-manager
-          {
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.extraSpecialArgs = { inherit inputs username; };
-            home-manager.users.${username} = import ./home/main-user.nix;
-          }
-        ];
-      };
+        home-manager.nixosModules.home-manager
+        {
+          home-manager.useGlobalPkgs = true;
+          home-manager.useUserPackages = true;
+          home-manager.extraSpecialArgs = {inherit inputs username;};
+          home-manager.users.${username} = import ./home/main-user.nix;
+        }
+      ];
     };
+  };
 }

@@ -56,35 +56,56 @@
     noctalia,
     ...
   }: let
-    username = "user";
+    username = "user"; # <- CHANGE ME (used for the user account + home-manager)
+
+    system = "x86_64-linux";
+
+    # Shared module list for the real machine.
+    baseModules = [
+      disko.nixosModules.disko
+      impermanence.nixosModules.impermanence
+
+      # Generic Intel laptop profiles — no dedicated T14s Gen 6 Intel
+      # profile exists in nixos-hardware yet. (common-cpu-intel also
+      # pulls in the Intel GPU profile: media drivers, VA-API.)
+      nixos-hardware.nixosModules.common-cpu-intel
+      nixos-hardware.nixosModules.common-pc-laptop
+      nixos-hardware.nixosModules.common-pc-laptop-ssd
+
+      ./disko.nix
+      ./zfs-impermanence.nix
+      ./hosts/t14s/configuration.nix
+      ./hosts/t14s/hardware.nix
+
+      home-manager.nixosModules.home-manager
+      {
+        home-manager.useGlobalPkgs = true;
+        home-manager.useUserPackages = true;
+        home-manager.extraSpecialArgs = {inherit inputs username;};
+        home-manager.users.${username} = import ./home/main-user.nix;
+      }
+    ];
   in {
+    # Real machine.
     nixosConfigurations.t14s = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
+      inherit system;
       specialArgs = {inherit inputs username;};
-      modules = [
-        disko.nixosModules.disko
-        impermanence.nixosModules.impermanence
+      modules = baseModules;
+    };
 
-        # Generic Intel laptop profiles — no dedicated T14s Gen 6 Intel
-        # profile exists in nixos-hardware yet. (common-cpu-intel also
-        # pulls in the Intel GPU profile: media drivers, VA-API.)
-        nixos-hardware.nixosModules.common-cpu-intel
-        nixos-hardware.nixosModules.common-pc-laptop
-        nixos-hardware.nixosModules.common-pc-laptop-ssd
-
-        ./disko.nix
-        ./zfs-impermanence.nix
-        ./hosts/t14s/configuration.nix
-        ./hosts/t14s/hardware.nix
-
-        home-manager.nixosModules.home-manager
-        {
-          home-manager.useGlobalPkgs = true;
-          home-manager.useUserPackages = true;
-          home-manager.extraSpecialArgs = {inherit inputs username;};
-          home-manager.users.${username} = import ./home/main-user.nix;
-        }
-      ];
+    # Same config, plus VM-test scaffolding (smaller disk/swap, headless
+    # console, a known login password). Build the bootable test VM with:
+    #   nix build -L '.#nixosConfigurations.t14s-vm.config.system.build.vmWithDisko'
+    #   ./result/bin/disko-vm
+    nixosConfigurations.t14s-vm = nixpkgs.lib.nixosSystem {
+      inherit system;
+      specialArgs = {inherit inputs username;};
+      modules =
+        baseModules
+        ++ [
+          ./vm-test.nix
+          {my.vmTest.enable = true;}
+        ];
     };
   };
 }

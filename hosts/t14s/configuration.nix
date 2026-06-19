@@ -1,7 +1,12 @@
 # hosts/t14s/configuration.nix
-{ config, lib, pkgs, inputs, username, ... }:
-
 {
+  config,
+  lib,
+  pkgs,
+  inputs,
+  username,
+  ...
+}: {
   # --------------------------------------------------------------- identity
   networking.hostName = "t14s";
   # networking.hostId is set in zfs-impermanence.nix — don't forget it!
@@ -19,18 +24,18 @@
   users.mutableUsers = false;
   users.users.${username} = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" "video" ];
+    extraGroups = ["wheel" "networkmanager" "video"];
     # Generate with: mkpasswd -m yescrypt
-    hashedPassword = "CHANGE-ME";
+    hashedPassword = "$y$j9T$z5UbqEIYx.3cZfrJRHCaH1$b/y2F2V3uc0KJYZ4CBY0OfUS11svfDuw/2x0rJ93An3";
     shell = pkgs.bash; # or pkgs.zsh / pkgs.fish
   };
 
   # -------------------------------------------------------------------- nix
   nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
+    experimental-features = ["nix-command" "flakes"];
     auto-optimise-store = true;
     # Pre-built noctalia binaries
-    extra-substituters = [ "https://noctalia.cachix.org" ];
+    extra-substituters = ["https://noctalia.cachix.org"];
     extra-trusted-public-keys = [
       "noctalia.cachix.org-1:pCOR47nnMEo5thcxNDtzWpOxNFQsBRglJzxWPp3dkU4="
     ];
@@ -79,8 +84,7 @@
       DisablePocket = true;
       ExtensionSettings = {
         "uBlock0@raymondhill.net" = {
-          install_url =
-            "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi";
+          install_url = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi";
           installation_mode = "force_installed";
         };
       };
@@ -92,13 +96,13 @@
     jetbrains-mono
     nerd-fonts.jetbrains-mono # icon-patched variant, used by noctalia widgets
     noto-fonts
-    noto-fonts-emoji
+    noto-fonts-color-emoji
   ];
 
   # -------------------------------------------------------------- packages
   environment.systemPackages = with pkgs; [
     # Desktop shell (bar, launcher, notifications, lock screen, OSD)
-    inputs.noctalia.packages.${pkgs.system}.default
+    inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default
 
     xwayland-satellite # X11 app support; recent niri autostarts it
     wl-clipboard
@@ -114,7 +118,7 @@
   ];
 
   # ------------------------------------------------------------ laptop bits
-  services.fwupd.enable = true;                 # LVFS firmware updates
+  services.fwupd.enable = true; # LVFS firmware updates
   services.power-profiles-daemon.enable = true; # pairs well with intel_pstate
   services.fstrim.enable = true;
   hardware.enableRedistributableFirmware = true;

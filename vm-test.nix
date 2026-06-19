@@ -10,12 +10,15 @@
 #   ./result/bin/disko-vm
 #
 # Quit the VM from the serial console with:  Ctrl-a  then  x
-{ config, lib, pkgs, username, ... }:
-
-let
-  cfg = config.my.vmTest;
-in
 {
+  config,
+  lib,
+  pkgs,
+  username,
+  ...
+}: let
+  cfg = config.my.vmTest;
+in {
   options.my.vmTest = {
     enable = lib.mkEnableOption "disko VM-test scaffolding";
 
@@ -47,6 +50,31 @@ in
     };
   };
 
+  # --------------------------------------------------------------------
+  # The robust neededForBoot fix.
+  #
+  # vmWithDisko builds a SEPARATE nested NixOS config whose qemu-vm layer
+  # rebuilds `fileSystems` and resets neededForBoot. That reset wins over
+  # mkForce AND mkOverride — no priority number reaches it, because the VM
+  # layer reconstructs the entries rather than merging into them.
+  #
+  # `apply` sidesteps the whole priority system: it post-processes the
+  # FINAL resolved value of the option, after every merge and override has
+  # happened. Here we OR neededForBoot with "is this an impermanence root"
+  # (/ for the wiped ephemeral side, /persist for the persistent side), so
+  # it is forced true no matter what the VM layer set. Gated on cfg.enable
+  # so the option declaration is harmless when VM-test mode is off.
+  options.fileSystems = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule ({config, ...}: {
+      options.neededForBoot = lib.mkOption {
+        apply = orig:
+          orig
+          || (cfg.enable
+            && (config.mountPoint == "/" || config.mountPoint == "/persist"));
+      };
+    }));
+  };
+
   config = lib.mkIf cfg.enable {
     # ---- VM disk + RAM -------------------------------------------------
     # These merge into the existing disko structure; nested attrs merge
@@ -68,8 +96,10 @@ in
     # ---- credentials ---------------------------------------------------
     # Your real account uses hashedPassword; override it to a known plain
     # password so you can actually log into the VM. Login: <username> / "vm".
-    users.users.${username}.hashedPassword = lib.mkForce null;
-    users.users.${username}.password = lib.mkForce "vm";
+    users.users.${username} = {
+      hashedPassword = lib.mkForce null;
+      password = lib.mkForce "vm";
+    };
     users.mutableUsers = lib.mkForce true;
   };
 }

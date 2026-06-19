@@ -11,21 +11,23 @@
 #     ./disko.nix
 #     ./zfs-impermanence.nix
 #   ];
-
-{ config, lib, pkgs, ... }:
-
 {
+  config,
+  lib,
+  pkgs,
+  ...
+}: {
   # ---------------------------------------------------------------- boot/zfs
   boot.loader.systemd-boot.enable = true;
   boot.loader.systemd-boot.configurationLimit = 10;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  boot.supportedFilesystems = [ "zfs" ];
+  boot.supportedFilesystems = ["zfs"];
   boot.zfs.forceImportRoot = false;
 
   # Required by ZFS — must be a unique 8-char hex string per machine.
   # Generate with: head -c4 /dev/urandom | od -A none -t x4 | tr -d ' '
-  networking.hostId = "CHANGE-ME";
+  networking.hostId = "5c355567";
 
   # ------------------------------------------------- rollback root on boot
   # systemd-stage-1 service that resets / to the blank snapshot after the
@@ -33,9 +35,9 @@
   boot.initrd.systemd.enable = true;
   boot.initrd.systemd.services.rollback = {
     description = "Rollback root filesystem to blank snapshot";
-    wantedBy = [ "initrd.target" ];
-    after = [ "zfs-import-rpool.service" ];
-    before = [ "sysroot.mount" ];
+    wantedBy = ["initrd.target"];
+    after = ["zfs-import-rpool.service"];
+    before = ["sysroot.mount"];
     unitConfig.DefaultDependencies = "no";
     serviceConfig.Type = "oneshot";
     script = ''
@@ -47,20 +49,20 @@
   # back) before the resume-from-hibernation attempt. If resume succeeds,
   # the initrd hands control to the hibernated kernel and neither the
   # import nor the rollback ever runs — which is exactly what we want.
-  boot.initrd.systemd.services."zfs-import-rpool".after =
-    [ "systemd-hibernate-resume.service" ];
+  boot.initrd.systemd.services."zfs-import-rpool".after = ["systemd-hibernate-resume.service"];
 
   # ----------------------------------------------------------- persistence
   # /persist must be mounted in the initrd so persisted files (ssh host
   # keys, machine-id, ...) are available early.
   fileSystems."/persist".neededForBoot = true;
+  fileSystems."/".neededForBoot = lib.mkForce true;
 
   environment.persistence."/persist" = {
     hideMounts = true;
     directories = [
       "/var/log"
-      "/var/lib/nixos"               # uid/gid mappings — do not omit
-      "/var/lib/systemd"             # timers, coredumps, journal state
+      "/var/lib/nixos" # uid/gid mappings — do not omit
+      "/var/lib/systemd" # timers, coredumps, journal state
       "/etc/NetworkManager/system-connections"
       # add as needed: "/var/lib/docker", "/var/lib/libvirt", ...
     ];
@@ -77,8 +79,8 @@
   # since /etc/ssh is recreated from /persist via bind mounts.
 
   # ----------------------------------------------------------- maintenance
-  services.zfs.autoScrub.enable = true;       # monthly scrub
-  services.zfs.trim.enable = true;            # periodic TRIM
+  services.zfs.autoScrub.enable = true; # monthly scrub
+  services.zfs.trim.enable = true; # periodic TRIM
 
   # Automatic snapshots of the "safe" datasets (opt-in per dataset)
   services.sanoid = {

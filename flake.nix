@@ -104,7 +104,10 @@
         baseModules
         ++ [
           ./vm-test.nix
-          {my.vmTest.enable = true;}
+          {
+            my.vmTest.enable = true;
+            my.vmTest.graphical = true;
+          }
         ];
     };
   };

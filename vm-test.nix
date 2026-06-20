@@ -48,6 +48,34 @@ in {
         reserving 32G of swap just to watch the thing boot.
       '';
     };
+
+    graphical = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        false: headless serial console (good for watching the ZFS import
+        and @blank rollback during disk/boot validation).
+        true: open a QEMU graphics window so the niri + noctalia session
+        actually renders and can be interacted with.
+      '';
+    };
+
+    unencrypted = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Strip ZFS native encryption and the LUKS swap layer for the VM
+        image build. Required because `zpool create` with
+        keylocation = "prompt" fails in a non-interactive `nix build`
+        ("encryption failure" — there is no TTY to read a passphrase), and a
+        store-resident key is circular since the Nix store lives inside the
+        pool. The VM still validates everything structural: the GPT layout,
+        the pool and dataset tree, the legacy mounts, and the @blank
+        rollback. Encryption itself is verified on the real install, where
+        you type the passphrase. Set to false only if you have a way to feed
+        keys to the headless builder.
+      '';
+    };
   };
 
   # --------------------------------------------------------------------
@@ -84,13 +112,53 @@ in {
 
     disko.memSize = cfg.memSize;
 
+    # ---- strip encryption for the unattended image build ---------------
+    # zpool create with keylocation="prompt" fails non-interactively, and
+    # the LUKS swap can't be unlocked at VM boot without a key. For the VM,
+    # drop both layers. We replace rootFsOptions wholesale (rather than
+    # nulling the encryption keys, which are typed as strings and reject
+    # null) so the three encryption properties simply aren't present.
+    disko.devices.zpool.rpool.rootFsOptions = lib.mkIf cfg.unencrypted (lib.mkForce {
+      mountpoint = "none";
+      canmount = "off";
+      compression = "zstd";
+      atime = "off";
+      xattr = "sa";
+      acltype = "posixacl";
+      dnodesize = "auto";
+      normalization = "formD";
+      relatime = "on";
+      "com.sun:auto-snapshot" = "false";
+    });
+    # Replace the LUKS swap partition's content with a plain swap area.
+    disko.devices.disk.main.content.partitions.swap.content = lib.mkIf cfg.unencrypted (lib.mkForce {
+      type = "swap";
+      resumeDevice = true;
+    });
+
+    # With no encrypted datasets, make sure the initrd never tries to ask
+    # for a passphrase (which would hang the headless VM).
+    boot.zfs.requestEncryptionCredentials = lib.mkIf cfg.unencrypted (lib.mkForce false);
+
     # ---- VM-only machine config ---------------------------------------
     # Applied only to the vmWithDisko runner, never to the installed system.
     virtualisation.vmVariantWithDisko = {
       virtualisation.cores = 4;
-      # Headless serial console — easier to drive than a graphical window,
-      # and you get to watch the early-boot ZFS import + rollback service.
-      virtualisation.graphics = false;
+      # Headless serial console for disk/boot validation, or a graphics
+      # window to actually see the niri + noctalia session render.
+      virtualisation.graphics = cfg.graphical;
+      virtualisation.resolution = lib.mkIf cfg.graphical {
+        x = 1280;
+        y = 800;
+      };
+      # niri is a Wayland compositor: it needs a DRM/KMS device with GBM/EGL.
+      # virtio-vga-gl is the standard GL-accelerated QEMU adapter for this;
+      # gtk,gl=on renders it on the host. NOTE: this requires a GL-capable
+      # host running a graphical session — it will NOT work over plain SSH.
+      virtualisation.qemu.options = lib.mkIf cfg.graphical [
+        "-device virtio-vga-gl"
+        "-display gtk,gl=on"
+      ];
     };
 
     # ---- credentials ---------------------------------------------------

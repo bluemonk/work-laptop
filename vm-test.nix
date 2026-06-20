@@ -157,7 +157,7 @@ in {
       # host running a graphical session — it will NOT work over plain SSH.
       virtualisation.qemu.options = lib.mkIf cfg.graphical [
         "-device virtio-vga-gl"
-        "-display gtk,gl=on"
+        "-display gtk,gl=off"
       ];
     };
 
